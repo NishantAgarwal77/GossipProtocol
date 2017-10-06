@@ -6,20 +6,33 @@ defmodule MainServerModule do
         numNodes=String.to_integer arg1
         topology=hd(list)
         algorithm=hd(tl(list))
+        GossipChildModule.start_link(numNodes, topology, algorithm) 
+        :ets.new(:num_nodes_lookup, [:set, :public, :named_table])
+        :ets.insert_new(:num_nodes_lookup, {"num_nodes", numNodes})
+        :ets.insert_new(:num_nodes_lookup, {"start_time", :os.system_time(:milli_seconds)})
 
         #GossipMaster.start_link(numNodes)
-        if(algorithm=="gossip") do            
-            GossipChildModule.start_link(numNodes, topology) 
-            :ets.new(:num_nodes_lookup, [:set, :public, :named_table])
-            :ets.insert_new(:num_nodes_lookup, {"num_nodes", numNodes})
-            :ets.insert_new(:num_nodes_lookup, {"start_time", :erlang.system_time})
-            pid = spawn(GossipStarter, :gossipTerminator , [])
-            startGossiping(numNodes)                                                             
+        if(algorithm=="gossip") do                       
+            #spawn(GossipStarter, :gossipTerminator , [numNodes])
+            startGossiping(numNodes)  
+        end                       
+
+        if(algorithm=="push-sum") do                            
+            startPushSumGossiping(numNodes)  
         end                       
     end 
 
     def startGossiping(numNodes) do
         pid = spawn(GossipStarter, :greet , [])
+        send pid, {self(), numNodes }
+        receive do
+            { :ok , message} ->
+            IO.puts message    
+        end 
+    end
+
+    def startPushSumGossiping(numNodes) do
+        pid = spawn(GossipStarter, :startPushSum , [])
         send pid, {self(), numNodes }
         receive do
             { :ok , message} ->
@@ -38,17 +51,26 @@ defmodule GossipStarter do
         end    
     end
 
-    def gossipTerminator do
+    def startPushSum do
+        receive do
+            {_, numNodes} ->
+            random_number = :rand.uniform(numNodes)
+            random_node="node_"<>Integer.to_string(random_number)   
+            GenServer.cast(String.to_atom(random_node),{:pushMessage, 1, 0})                                 
+        end    
+    end
+
+    def gossipTerminator(numNodes) do       
         [{_, count}] = :ets.lookup(:num_nodes_lookup, "num_nodes") 
         if count == 0 do    
             [{_, time}] = :ets.lookup(:num_nodes_lookup, "start_time")
-            total_time_taken = :erlang.system_time - time
-            IO.puts "Network has converged in " <> Integer.to_string(total_time_taken) 
+            total_time_taken = :os.system_time(:milli_seconds) - time
+            IO.puts "Network has converged in #{total_time_taken} milliseconds"  
             Process.exit(self(), :kill)
         else 
             :timer.sleep(100)
             IO.puts "Remaining Nodes " <> Integer.to_string(count)
-            gossipTerminator()
+            gossipTerminator(numNodes)
         end       
     end
 end
