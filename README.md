@@ -20,8 +20,5 @@ Below is the tabular representation of the results obtained :
 
 |                       | Full Topology | Line Topology | 2D Topology  | Imp 2D Topology |
 | ------------------    |:-------------:| -------------:| ------------:|----------------:|
-| Gossip Algorithm      | `20000`       |   `220300`    | `320000`     |    `20000`      |   
-| Push - Sum Algorithm  | `10000`       |   `10000`     |   `10000`    |    `10000`      |
-
-
-
+| Gossip Algorithm      | `20000`       |   `40300`     |  `30000`     |    `40000`      |   
+| Push - Sum Algorithm  |  `5000`       |   `30000`     |   `20000`    |    `20000`      |
