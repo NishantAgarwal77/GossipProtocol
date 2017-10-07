@@ -1,37 +1,33 @@
 defmodule WorkerModule do
     
-    def start_link(nodeId, numNodes, topology, algorithm) do
+    def start_link(nodeId, numNodes, topology, algorithm, mainProcessID) do
         currentNodeName="node_"<>Integer.to_string(nodeId)
-        GenServer.start_link(__MODULE__,[nodeId, numNodes, topology, algorithm],name: String.to_atom(currentNodeName))
+        GenServer.start_link(__MODULE__,[nodeId, numNodes, topology, algorithm, mainProcessID],name: String.to_atom(currentNodeName))
     end   
 
-    def init([nodeId, total_nodes, topology, algorithm]) do        
+    def init([nodeId, total_nodes, topology, algorithm, mainProcessID]) do     
+        Process.flag(:trap_exit, true)
         map = case algorithm do
             "gossip" -> 
              %{"id" => nodeId,"total_nodes" =>total_nodes,"neighbours" =>[],"msg_count" =>0} 
             "push-sum" ->     
              %{"id" => nodeId,"total_nodes" =>total_nodes,"neighbours" =>[],"SValue" => nodeId, "WValue" => 1, "consecutiveCount" => 0}       
         end                
-       if topology =="full" do
-            #IO.puts "Full topology detected"
-            state=buildFullTopology(map)
-            #IO.puts "Full topology generated"
-        end
-        if topology == "line" do            
-            state=buildLineTopology(map)            
-        end
-        if topology == "2D" do            
-            n= round :math.ceil(:math.sqrt(total_nodes))
-            total_nodes=n*n 
 
-            Map.put(map,"total_nodes",total_nodes)
-            state=build2DTopology(map)           
-        end
-        if topology == "imp2D" do           
-            n= round :math.ceil(:math.sqrt(total_nodes))
-            total_nodes=n*n 
-            Map.put(map,"total_nodes",total_nodes)
-            state=buildImp2DTopology(map)           
+        state = case topology do
+            "full" -> buildFullTopology(map)
+            "line" -> buildLineTopology(map)  
+            "2D" -> n= round :math.ceil(:math.sqrt(total_nodes))
+                    total_nodes=n*n 
+                    Map.put(map,"total_nodes",total_nodes)
+                    build2DTopology(map)  
+            "imp2D" ->  n= round :math.ceil(:math.sqrt(total_nodes))
+                        total_nodes=n*n 
+                        Map.put(map,"total_nodes",total_nodes)
+                        buildImp2DTopology(map)
+            _ -> IO.puts "Entered topology is invalid"                        
+            Process.exit(mainProcessID, :shutdown) 
+            Supervisor.stop(GossipChildModule)                 
         end
         {:ok,state}
     end
@@ -158,12 +154,12 @@ defmodule WorkerModule do
         {:reply,state,state}
     end
 
-    def sendMessage(current_Node, neighbours, msg) do
-        [{_, count}] = :ets.lookup(:num_nodes_lookup, "num_nodes")
-        if count > 0 do 
+    def sendMessage(current_Node, neighbours, msg) do        
+        if length(neighbours) > 0 do 
             random_num=Enum.random(neighbours)
             random_node="node_"<>Integer.to_string(random_num)
             random_pid=Process.whereis(String.to_atom(random_node))
+            neighbours = List.delete(neighbours, random_num) 
             if(random_pid !=nil && Process.alive?(random_pid)==true) do
                 GenServer.call(String.to_atom(random_node),{:passMessage,msg})
             end      
@@ -197,7 +193,7 @@ defmodule WorkerModule do
             timeTaken = :os.system_time(:milli_seconds) - time
             IO.puts "Node #{current_node} has reached convergence, hence exiting"
             IO.puts "Network has converged in #{timeTaken} milliseconds"            
-            GenServer.stop(String.to_atom(currentNodeName), :normal)
+            GenServer.stop(String.to_atom(currentNodeName), :terminate)
         end
         state = Map.put(state,"SValue",newSValue)
         state = Map.put(state,"WValue",newWValue)
@@ -214,5 +210,10 @@ defmodule WorkerModule do
         else 
             sendPushMessage(neighbours, newSValue, newWValue)
         end                     
-    end 
+    end
+
+    def terminate(reason,_state) do
+        #IO.puts "terminating: #{inspect self()}: #{inspect reason}"
+        :ok
+    end     
 end

@@ -5,22 +5,27 @@ defmodule MainServerModule do
         [arg1 | list]=inputParsedVal;
         numNodes=String.to_integer arg1
         topology=hd(list)
-        algorithm=hd(tl(list))
-        GossipChildModule.start_link(numNodes, topology, algorithm) 
-        :ets.new(:num_nodes_lookup, [:set, :public, :named_table])
-        :ets.insert_new(:num_nodes_lookup, {"num_nodes", numNodes})
-        :ets.insert_new(:num_nodes_lookup, {"start_time", :os.system_time(:milli_seconds)})
-
-        #GossipMaster.start_link(numNodes)
-        if(algorithm=="gossip") do                       
-            #spawn(GossipStarter, :gossipTerminator , [numNodes])
-            startGossiping(numNodes)  
-        end                       
-
-        if(algorithm=="push-sum") do                            
+        algorithm=hd(tl(list))               
+        #GossipMaster.start_link(numNodes)   
+        Process.flag(:trap_exit, true)     
+        case algorithm do
+            "gossip"-> 
+            startServers(numNodes, topology, algorithm)
+            startGossiping(numNodes) 
+            "push-sum" -> 
+            startServers(numNodes, topology, algorithm)
             startPushSumGossiping(numNodes)  
-        end                       
+            _ -> IO.puts "Enter Valid Algorithm"
+            Process.exit(self(), :normal)
+        end                              
     end 
+
+    def startServers(numNodes, topology, algorithm) do
+        GossipChildModule.start_link(numNodes, topology, algorithm, self())       
+        :ets.new(:num_nodes_lookup, [:set, :public, :named_table])
+        :ets.insert_new(:num_nodes_lookup, {"num_nodes", numNodes})        
+        :ets.insert_new(:num_nodes_lookup, {"start_time", :os.system_time(:milli_seconds)})              
+    end
 
     def startGossiping(numNodes) do
         pid = spawn(GossipStarter, :greet , [])
@@ -47,7 +52,7 @@ defmodule GossipStarter do
             {_, numNodes} ->
             random_number = :rand.uniform(numNodes)
             random_node="node_"<>Integer.to_string(random_number)   
-            spawn fn -> GenServer.call(String.to_atom(random_node),{:passMessage,"Hi there"}) end              
+            spawn fn -> GenServer.call(String.to_atom(random_node),{:passMessage,"Hi there"}) end                                                                       
         end    
     end
 
