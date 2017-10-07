@@ -15,8 +15,8 @@ We have successfully implemented the `Gossip` and `Push-Sum` Algorithm over Topo
 
 By successfull implemetation we imply that the network converges (according to the definition of the algorithm) for the provided number of nodes in the network.
 
-## Nodes Convergence Details
-Below is the tabular representation of the results obtained :
+## Largest Network Details
+Below is the tabular representation of the largest network of nodes used for both the algorithm with each type of typology :
 
 |                       | Full Topology | Line Topology | 2D Topology  | Imp 2D Topology |
 | ------------------    |:-------------:| -------------:| ------------:|----------------:|
